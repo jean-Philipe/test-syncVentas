@@ -1,0 +1,28 @@
+{
+  "name": "axam-ordenes-de-compras",
+  "version": "1.0.0",
+  "description": "Sistema para mapear productos y calcular ventas mensuales desde FAVEs de Manager+",
+  "main": "index.js",
+  "scripts": {
+    "sync:productos": "node scripts/syncProductos.js",
+    "sync:ventas": "node scripts/syncVentas.js",
+    "init:db": "node scripts/initDatabase.js",
+    "consultar": "node scripts/consultarVentas.js",
+    "test:fave": "node scripts/testFAVE.js",
+    "start": "node scripts/syncProductos.js && node scripts/syncVentas.js"
+  },
+  "keywords": [
+    "manager",
+    "fave",
+    "ventas",
+    "productos"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1",
+    "better-sqlite3": "^9.2.2",
+    "date-fns": "^2.30.0"
+  }
+}
