@@ -145,6 +145,9 @@ function agruparFAVEsPorMes(faves) {
     return favesPorMes;
 }
 
+// Variable global para rastrear si ya mostramos el primer error
+let primerErrorMostrado = false;
+
 /**
  * Procesar una FAVE individual
  */
@@ -154,7 +157,55 @@ async function processFAVE(fave) {
     
     try {
         // Obtener detalles con details=1
-        const faveDetails = await getFAVEDetails(fave);
+        let faveDetails = await getFAVEDetails(fave);
+        
+        // Si es el primer error y no se obtuvieron detalles, obtener información detallada
+        if (!faveDetails && !primerErrorMostrado) {
+            primerErrorMostrado = true;
+            const errorInfo = await getFAVEDetails(fave, 2, true);
+            
+            logError(`\n❌ PRIMER ERROR DETECTADO - FAVE Folio: ${folio}, docnumreg: ${docnumreg}`);
+            logError(`   Endpoint: ${errorInfo?.endpoint || 'N/A'}`);
+            
+            if (errorInfo?.success === false) {
+                logError(`   Error: ${errorInfo?.error || 'No se pudieron obtener detalles de la FAVE'}`);
+                
+                if (errorInfo?.errorDetails) {
+                    logError(`   Status: ${errorInfo.errorDetails.status || 'N/A'}`);
+                    logError(`   Status Text: ${errorInfo.errorDetails.statusText || 'N/A'}`);
+                    if (errorInfo.errorDetails.data) {
+                        logError(`   Error Data: ${JSON.stringify(errorInfo.errorDetails.data, null, 2)}`);
+                    }
+                }
+                
+                if (errorInfo?.response) {
+                    logError(`   Respuesta completa:`);
+                    console.error(JSON.stringify(errorInfo.response, null, 2));
+                }
+                
+                // También mostrar la estructura de la FAVE original
+                logError(`   FAVE original:`);
+                console.error(JSON.stringify(fave, null, 2));
+                
+                return {
+                    success: false,
+                    productos: [],
+                    error: 'No se pudieron obtener detalles de la FAVE'
+                };
+            } else if (errorInfo?.success === true) {
+                // La segunda llamada tuvo éxito, usar esos datos
+                logWarning(`   ⚠️  La primera llamada falló (probablemente por timeout), pero la segunda tuvo éxito. Usando datos de la segunda llamada.`);
+                if (errorInfo.warning) {
+                    logWarning(`   Advertencia: ${errorInfo.warning}`);
+                }
+                
+                // Usar los datos obtenidos en la segunda llamada
+                faveDetails = errorInfo.data;
+                
+                // NO retornar error, continuar con el procesamiento normal
+                // El código continuará después de este bloque para extraer productos
+            }
+        }
         
         if (!faveDetails) {
             return {
@@ -167,6 +218,28 @@ async function processFAVE(fave) {
         // Extraer productos de los detalles
         const productos = extractProductosFromFAVE(faveDetails);
         
+        // Si no se extrajeron productos y es el primer error, mostrar información detallada
+        if (productos.length === 0 && !primerErrorMostrado) {
+            primerErrorMostrado = true;
+            
+            logError(`\n❌ PRIMER ERROR DETECTADO - FAVE Folio: ${folio}, docnumreg: ${docnumreg}`);
+            logError(`   Error: Sin productos extraídos`);
+            logError(`   Respuesta de detalles obtenida:`);
+            console.error(JSON.stringify(faveDetails, null, 2));
+            
+            // Verificar si tiene el campo detalles
+            if (faveDetails.detalles) {
+                logError(`   Campo 'detalles' encontrado: ${Array.isArray(faveDetails.detalles) ? `Array con ${faveDetails.detalles.length} elementos` : typeof faveDetails.detalles}`);
+                if (Array.isArray(faveDetails.detalles) && faveDetails.detalles.length > 0) {
+                    logError(`   Primer elemento de detalles:`);
+                    console.error(JSON.stringify(faveDetails.detalles[0], null, 2));
+                }
+            } else {
+                logError(`   Campo 'detalles' NO encontrado`);
+                logError(`   Campos disponibles: ${Object.keys(faveDetails).join(', ')}`);
+            }
+        }
+        
         return {
             success: productos.length > 0,
             productos,
@@ -174,6 +247,20 @@ async function processFAVE(fave) {
         };
         
     } catch (error) {
+        // Si es el primer error, mostrar información detallada
+        if (!primerErrorMostrado) {
+            primerErrorMostrado = true;
+            
+            logError(`\n❌ PRIMER ERROR DETECTADO - FAVE Folio: ${folio}, docnumreg: ${docnumreg}`);
+            logError(`   Error: ${error.message}`);
+            if (error.stack) {
+                logError(`   Stack trace:`);
+                console.error(error.stack);
+            }
+            logError(`   FAVE original:`);
+            console.error(JSON.stringify(fave, null, 2));
+        }
+        
         return {
             success: false,
             productos: [],
@@ -183,62 +270,76 @@ async function processFAVE(fave) {
 }
 
 /**
- * Procesar FAVEs en lotes paralelos
+ * Procesar FAVEs con concurrencia limitada (20 a la vez) para evitar rate limiting
  */
-async function processFAVEsInBatches(faves, batchSize = 50, concurrency = 10) {
+async function processFAVEsSequentially(faves, concurrency = 20) {
     const resultados = [];
-    let procesadas = 0;
+    let procesadas = 0;  
     let conProductos = 0;
     let errores = 0;
     
-    // Dividir en lotes
-    for (let i = 0; i < faves.length; i += batchSize) {
-        const batch = faves.slice(i, i + batchSize);
-        
-        // Procesar lotes con límite de concurrencia
-        const batchPromises = [];
-        for (let j = 0; j < batch.length; j += concurrency) {
-            const concurrentBatch = batch.slice(j, j + concurrency);
-            const promises = concurrentBatch.map(fave => processFAVE(fave));
-            batchPromises.push(Promise.allSettled(promises));
+    const folio = (fave) => fave.folio || fave.numero || fave.id || 'N/A';
+    
+    // Función para procesar una FAVE y mostrar el resultado
+    async function processSingleFAVE(fave, index) {
+        try {
+            const resultado = await processFAVE(fave);
+            procesadas++;
+            
+            // Contar estadísticas
+            if (resultado.success && resultado.productos.length > 0) {
+                conProductos++;
+                const porcentaje = ((procesadas / faves.length) * 100).toFixed(1);
+                logSuccess(`  [${procesadas}/${faves.length}] (${porcentaje}%) ✅ Folio ${folio(fave)}: ${resultado.productos.length} productos extraídos`);
+            } else {
+                errores++;
+                const porcentaje = ((procesadas / faves.length) * 100).toFixed(1);
+                logError(`  [${procesadas}/${faves.length}] (${porcentaje}%) ❌ Folio ${folio(fave)}: ${resultado.error || 'Sin productos extraídos'}`);
+            }
+            
+            // Mostrar estadísticas acumuladas cada 50 FAVEs procesadas
+            if (procesadas % 50 === 0 || procesadas === faves.length) {
+                const porcentajeConProductos = procesadas > 0 ? ((conProductos/procesadas)*100).toFixed(1) : 0;
+                const porcentajeErrores = procesadas > 0 ? ((errores/procesadas)*100).toFixed(1) : 0;
+                logInfo(`     Estadísticas acumuladas: ${conProductos} con productos (${porcentajeConProductos}%), ${errores} errores (${porcentajeErrores}%)`);
+            }
+            
+            return { index, resultado };
+            
+        } catch (error) {
+            errores++;
+            procesadas++;
+            const porcentaje = ((procesadas / faves.length) * 100).toFixed(1);
+            logError(`  [${procesadas}/${faves.length}] (${porcentaje}%) ❌ Folio ${folio(fave)}: Error - ${error.message}`);
+            
+            return {
+                index,
+                resultado: {
+                    success: false,
+                    productos: [],
+                    error: error.message
+                }
+            };
         }
+    }
+    
+    // Procesar FAVEs en lotes con concurrencia limitada
+    for (let i = 0; i < faves.length; i += concurrency) {
+        const batch = faves.slice(i, i + concurrency);
+        const batchPromises = batch.map((fave, batchIndex) => processSingleFAVE(fave, i + batchIndex));
         
-        // Esperar a que todos los lotes del batch terminen
         const batchResults = await Promise.all(batchPromises);
         
-        // Aplanar resultados y contar estadísticas
-        for (const batchResult of batchResults) {
-            for (const result of batchResult) {
-                let resultadoFinal;
-                if (result.status === 'fulfilled') {
-                    resultadoFinal = result.value;
-                } else {
-                    resultadoFinal = {
-                        success: false,
-                        productos: [],
-                        error: result.reason?.message || 'Error desconocido'
-                    };
-                    errores++;
-                }
-                
-                // Contar estadísticas
-                if (resultadoFinal.success && resultadoFinal.productos.length > 0) {
-                    conProductos++;
-                } else {
-                    errores++;
-                }
-                
-                resultados.push(resultadoFinal);
-                procesadas++;
-                
-                // Mostrar progreso cada 100 FAVEs procesadas
-                if (procesadas % 100 === 0 || procesadas === faves.length) {
-                    logProgress(procesadas, faves.length, 'FAVEs');
-                    const porcentajeConProductos = procesadas > 0 ? ((conProductos/procesadas)*100).toFixed(1) : 0;
-                    const porcentajeErrores = procesadas > 0 ? ((errores/procesadas)*100).toFixed(1) : 0;
-                    logInfo(`     Estadísticas: ${conProductos} con productos (${porcentajeConProductos}%), ${errores} errores (${porcentajeErrores}%)`);
-                }
-            }
+        // Ordenar resultados por índice original y agregarlos
+        batchResults.sort((a, b) => a.index - b.index);
+        for (const { resultado } of batchResults) {
+            resultados.push(resultado);
+        }
+        
+        // Agregar un pequeño delay entre lotes para evitar rate limiting
+        // (solo si no es el último lote)
+        if (i + concurrency < faves.length) {
+            await new Promise(resolve => setTimeout(resolve, 200)); // 200ms entre lotes
         }
     }
     
@@ -259,10 +360,13 @@ async function processMonthFAVEs(db, faves, ano, mes) {
         return { procesadas: 0, productos: 0, errores: 0 };
     }
     
-    logInfo(`  Procesando ${faves.length} FAVEs en paralelo...`);
+    // Resetear el flag de primer error para cada mes
+    primerErrorMostrado = false;
     
-    // Procesar FAVEs en paralelo
-    const resultados = await processFAVEsInBatches(faves, 50, 10);
+    logInfo(`  Procesando ${faves.length} FAVEs con concurrencia de 20...`);
+    
+    // Procesar FAVEs con concurrencia de 20 para evitar rate limiting
+    const resultados = await processFAVEsSequentially(faves, 20);
     
     console.log('\n');
     
