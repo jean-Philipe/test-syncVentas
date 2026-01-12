@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Órdenes de Compra - AXAM</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Órdenes de Compra - AXAM</h1>
+            <div class="filters">
+                <div class="filter-group">
+                    <label for="marca">Marca:</label>
+                    <input type="text" id="marca" placeholder="Ej: KC" />
+                </div>
+                <div class="filter-group">
+                    <label for="meses">Meses:</label>
+                    <select id="meses">
+                        <option value="3">3 meses</option>
+                        <option value="6">6 meses</option>
+                        <option value="12" selected>12 meses</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="busqueda">Buscar:</label>
+                    <input type="text" id="busqueda" placeholder="SKU o descripción..." />
+                </div>
+                <div class="filter-group filter-checkbox">
+                    <label for="ocultarCero" class="checkbox-label">
+                        <input type="checkbox" id="ocultarCero" />
+                        <span>Ocultar promedio venta = 0</span>
+                    </label>
+                </div>
+                <button id="btnCargar" class="btn-primary">Cargar Datos</button>
+            </div>
+        </header>
+
+        <div class="status-bar">
+            <span id="status">Listo</span>
+            <span id="totalProductos">0 productos</span>
+        </div>
+
+        <div class="table-container">
+            <table id="tablaProductos">
+                <thead id="theadProductos">
+                    <tr id="theadMeses">
+                        <!-- Se generará dinámicamente: SKU, Descripción, meses históricos, y "Mes Actual" -->
+                    </tr>
+                    <tr id="theadMesesActual">
+                        <!-- Se llenará dinámicamente con las columnas del mes actual -->
+                    </tr>
+                </thead>
+                <tbody id="tbodyProductos">
+                    <tr>
+                        <td colspan="10" class="empty-message">Cargue los datos para comenzar</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

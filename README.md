@@ -50,6 +50,72 @@ Obtiene todas las FAVEs desde enero 2025, calcula las ventas por producto y mes,
 npm run sync:ventas
 ```
 
+### Sincronizar Stock
+
+Obtiene el stock actual de todos los productos desde Manager+ y lo sincroniza con la base de datos. El stock se obtiene de la "Bodega General" excluyendo bodegas temporales:
+
+```bash
+npm run sync:stock
+```
+
+Este script:
+- Obtiene todos los productos con stock desde Manager+ usando el endpoint con `con_stock=S`
+- Extrae el stock del campo "stock" (array de arrays con campo "saldo")
+- Filtra solo las bodegas generales (excluye bodegas temporales)
+- Actualiza el campo `stockActual` en la tabla `ventas_actuales` de la base de datos
+
+**⚠️ IMPORTANTE**: Este script debe ejecutarse periódicamente (recomendado cada hora) para mantener el stock actualizado. La vista tipo Excel muestra el stock desde la base de datos, no consulta Manager+ en tiempo real para evitar tiempos de espera largos.
+
+### Sincronizar Ventas del Mes Actual
+
+Obtiene solo las FAVEs del mes actual (desde el inicio del mes hasta hoy), las procesa y actualiza la tabla `ventas_actuales` con las cantidades vendidas:
+
+```bash
+npm run sync:ventas:actuales
+```
+
+Este script:
+- Obtiene solo las FAVEs del mes actual (desde el inicio del mes hasta hoy)
+- Procesa las FAVEs y extrae los productos vendidos
+- Actualiza la tabla `ventas_actuales` sumando las cantidades vendidas (permite múltiples ejecuciones)
+- Permite consultar cuánto se ha vendido actualmente además del stock que queda
+
+**⚠️ IMPORTANTE**: Este script está diseñado para ejecutarse periódicamente (recomendado cada hora) junto con la sincronización de stock, para mantener actualizadas tanto las ventas del mes actual como el stock disponible.
+
+#### Configurar Ejecución Automática Cada Hora
+
+Para ejecutar la sincronización de stock y ventas actuales automáticamente cada hora, puedes usar un cron job:
+
+1. **Abrir el crontab**:
+```bash
+crontab -e
+```
+
+2. **Agregar las siguientes líneas** (ajusta la ruta según tu instalación):
+```bash
+# Sincronizar stock cada hora
+0 * * * * cd /home/jeanf/japs/axam-ordenes-de-compras && /usr/bin/npm run sync:stock >> /home/jeanf/japs/axam-ordenes-de-compras/logs/stock-sync.log 2>&1
+
+# Sincronizar ventas del mes actual cada hora
+0 * * * * cd /home/jeanf/japs/axam-ordenes-de-compras && /usr/bin/npm run sync:ventas:actuales >> /home/jeanf/japs/axam-ordenes-de-compras/logs/ventas-actuales-sync.log 2>&1
+```
+
+O si prefieres usar la ruta completa de node:
+```bash
+# Sincronizar stock cada hora
+0 * * * * cd /home/jeanf/japs/axam-ordenes-de-compras && /usr/bin/node scripts/actualizarStock.js >> /home/jeanf/japs/axam-ordenes-de-compras/logs/stock-sync.log 2>&1
+
+# Sincronizar ventas del mes actual cada hora
+0 * * * * cd /home/jeanf/japs/axam-ordenes-de-compras && /usr/bin/node scripts/syncVentasActuales.js >> /home/jeanf/japs/axam-ordenes-de-compras/logs/ventas-actuales-sync.log 2>&1
+```
+
+Esto ejecutará ambas sincronizaciones cada hora (al minuto 0 de cada hora).
+
+**Nota**: Asegúrate de crear el directorio `logs` si no existe:
+```bash
+mkdir -p logs
+```
+
 ### Ejecutar Todo
 
 Ejecuta ambos scripts en secuencia:

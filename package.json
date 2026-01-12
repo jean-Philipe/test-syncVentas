@@ -6,10 +6,18 @@
   "scripts": {
     "sync:productos": "node scripts/syncProductos.js",
     "sync:ventas": "node scripts/syncVentas.js",
+    "sync:ventas:actuales": "node scripts/syncVentasActuales.js",
+    "sync:stock": "node scripts/actualizarStock.js",
     "init:db": "node scripts/initDatabase.js",
     "consultar": "node scripts/consultarVentas.js",
     "test:fave": "node scripts/testFAVE.js",
-    "start": "node scripts/syncProductos.js && node scripts/syncVentas.js"
+    "start": "node scripts/syncProductos.js && node scripts/syncVentas.js",
+    "server": "node server.js",
+    "dev": "node server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "migrar:prisma": "node scripts/migrarABasePrisma.js"
   },
   "keywords": [
     "manager",
@@ -20,9 +28,13 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@prisma/client": "^5.22.0",
     "axios": "^1.6.0",
-    "dotenv": "^16.3.1",
     "better-sqlite3": "^9.2.2",
-    "date-fns": "^2.30.0"
+    "cors": "^2.8.5",
+    "date-fns": "^2.30.0",
+    "dotenv": "^16.3.1",
+    "express": "^5.2.1",
+    "prisma": "^5.22.0"
   }
 }

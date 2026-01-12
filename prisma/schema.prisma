@@ -1,0 +1,78 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Producto {
+  id          Int      @id @default(autoincrement())
+  sku         String   @unique
+  descripcion String
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  ventasHistoricas VentaHistorica[]
+  ventasActuales   VentaActual[]
+  pedidos          Pedido[]
+
+  @@index([sku])
+  @@map("productos")
+}
+
+model VentaHistorica {
+  id              Int      @id @default(autoincrement())
+  productoId      Int      @map("producto_id")
+  ano             Int
+  mes             Int      // 1-12
+  cantidadVendida Float    @default(0) @map("cantidad_vendida")
+  montoNeto       Float    @default(0) @map("monto_neto")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  producto Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@unique([productoId, ano, mes])
+  @@index([productoId])
+  @@index([ano, mes])
+  @@index([productoId, ano, mes])
+  @@map("ventas_historicas")
+}
+
+model VentaActual {
+  id              Int      @id @default(autoincrement())
+  productoId      Int      @unique @map("producto_id")
+  cantidadVendida Float    @default(0) @map("cantidad_vendida")
+  stockActual     Float    @default(0) @map("stock_actual")
+  montoNeto       Float    @default(0) @map("monto_neto")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  producto Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@index([productoId])
+  @@map("ventas_actuales")
+}
+
+model Pedido {
+  id         Int      @id @default(autoincrement())
+  productoId Int      @map("producto_id")
+  ano        Int
+  mes        Int      // 1-12
+  cantidad   Float    @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  producto Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@unique([productoId, ano, mes])
+  @@index([productoId])
+  @@index([ano, mes])
+  @@index([productoId, ano, mes])
+  @@map("pedidos")
+}
