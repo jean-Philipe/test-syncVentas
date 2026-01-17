@@ -5,8 +5,10 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const cron = require('node-cron');
 const { logInfo, logSuccess, logError } = require('./utils/logger');
 const { necesitaRotacion, ejecutarRotacionCompleta } = require('./services/rotacionService');
+const { syncYesterday } = require('./scripts/syncDaily');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -26,10 +28,12 @@ app.use((req, res, next) => {
 const productosRoutes = require('./routes/productos');
 const pedidosRoutes = require('./routes/pedidos');
 const rotacionRoutes = require('./routes/rotacion');
+const dashboardRoutes = require('./routes/dashboard');
 
 app.use('/api/productos', productosRoutes);
 app.use('/api/pedidos', pedidosRoutes);
 app.use('/api/rotacion', rotacionRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Servir archivos estáticos del frontend (después de las rutas de API)
 app.use(express.static('public'));
@@ -97,7 +101,20 @@ async function startServer() {
     try {
         // Verificar rotación antes de iniciar
         await verificarRotacionInicial();
-        
+
+        // Programar sincronización diaria a las 01:00 AM
+        cron.schedule('0 1 * * *', async () => {
+            logInfo('⏰ Ejecutando sincronización diaria programada (01:00 AM)...');
+            try {
+                await syncYesterday();
+                logSuccess('✅ Sincronización diaria programada completada');
+            } catch (error) {
+                logError(`❌ Error en sincronización diaria programada: ${error.message}`);
+            }
+        });
+
+        logInfo('🕒 Tarea CRON programada: Sincronización diaria a las 01:00 AM');
+
         app.listen(PORT, () => {
             logSuccess(`🚀 Servidor iniciado en http://localhost:${PORT}`);
             logInfo(`📊 API de Órdenes de Compra - AXAM`);
