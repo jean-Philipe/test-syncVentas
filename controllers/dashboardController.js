@@ -402,30 +402,21 @@ async function syncStream(req, res) {
             }, `${prodStats.created} nuevos, ${prodStats.updated} actualizados`);
         }
 
-        // 2. Ventas Ayer (Incremental)
-        const yesterday = subDays(new Date(), 1);
-        sendEvent({ step: 'sales', message: `Analizando ventas del ${format(yesterday, 'dd/MM/yyyy')}...` });
-        const salesStats = await syncDaySales(yesterday);
-        sendEvent({
-            step: 'sales_done',
-            message: `Ventas ayer: ${salesStats.processed} docs procesados`
-        });
-
-        // 3. Datos mes actual (Acumulado + Stock)
-        sendEvent({ step: 'data', message: 'Actualizando stock y contadores...' });
-        const dataStats = await syncCurrentMonthData();
+        // 2. Datos mes actual (Ventas + Stock) - incluir ventas hasta AHORA
+        sendEvent({ step: 'data', message: 'Obteniendo ventas y stock del mes actual...' });
+        const dataStats = await syncCurrentMonthData(true);  // true = incluir ventas hasta ahora (incluyendo hoy)
         sendEvent({
             step: 'data_done',
-            message: `Stock actualizado para ${dataStats.updated} productos`
+            message: `${dataStats.productosConVentas} productos con ventas, ${dataStats.updated} actualizados`
         });
 
         // Registrar log de ventas del mes actual
+        // productosConVentas = productos con ventas en el mes (hasta ahora, incluyendo hoy)
         await registrarSync('ventas_actuales', {
             mesTarget: mesActual.mes,
             anoTarget: mesActual.ano,
-            documentos: salesStats.processed || 0,
             productos: dataStats.updated || 0,
-            productosConVentas: dataStats.productosConVentas || 0
+            productosConVentas: dataStats.productosConVentas || 0  // Productos con ventas del mes
         }, `Sincronización manual desde dashboard`);
 
         sendEvent({ step: 'complete', message: '¡Sincronización finalizada!' });

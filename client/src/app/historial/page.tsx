@@ -69,10 +69,6 @@ function SyncLogRow({ log }: { log: SyncLog }) {
                 <span className="font-medium text-slate-700">{mesLabel}</span>
             </td>
 
-            {/* Documentos */}
-            <td className="px-4 py-3 text-center">
-                <span className="text-slate-900 font-mono">{log.documentos}</span>
-            </td>
 
             {/* Productos (Total) */}
             <td className="px-4 py-3 text-center">
@@ -205,9 +201,7 @@ export default function HistorialPage() {
                                                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                                                     Mes Afectado
                                                 </th>
-                                                <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                                                    Documentos
-                                                </th>
+
                                                 <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">
                                                     Productos (Total)
                                                 </th>

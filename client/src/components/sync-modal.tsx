@@ -20,8 +20,7 @@ interface Step {
 
 const INITIAL_STEPS: Step[] = [
     { id: "products", label: "Catálogo de Productos", status: "pending" },
-    { id: "sales", label: "Ventas del Día Anterior", status: "pending" },
-    { id: "data", label: "Stock y Datos Mes Actual", status: "pending" },
+    { id: "data", label: "Ventas y Stock del Mes", status: "pending" },
 ];
 
 export function SyncModal({ isOpen, onClose }: SyncModalProps) {
@@ -79,12 +78,7 @@ export function SyncModal({ isOpen, onClose }: SyncModalProps) {
                         updateStep("products", "success", data.message);
                         break;
 
-                    case "sales":
-                        updateStep("sales", "loading", data.message);
-                        break;
-                    case "sales_done":
-                        updateStep("sales", "success", data.message);
-                        break;
+
 
                     case "data":
                         updateStep("data", "loading", data.message);

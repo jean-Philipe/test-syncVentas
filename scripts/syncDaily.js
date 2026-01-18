@@ -197,9 +197,10 @@ async function syncFullMonth(year, month) {
 }
 
 /**
- * Sincronizar stock actual y ventas del mes actual (hasta ayer)
+ * Sincronizar stock actual y ventas del mes actual
+ * @param {boolean} includeToday - Si true, incluye ventas hasta AHORA. Si false, solo hasta ayer (para CRON)
  */
-async function syncCurrentMonthData() {
+async function syncCurrentMonthData(includeToday = false) {
     logSection('SINCRONIZANDO DATOS DEL MES ACTUAL');
 
     const { getChileDate, formatChileDate } = require('../utils/timezone');
@@ -210,26 +211,30 @@ async function syncCurrentMonthData() {
     const month = getMonth(today) + 1;
 
     try {
-        // 1. Primero sincronizar ventas del mes actual COMPLETO hasta AYER (23:59:59)
-        // El día de hoy se obtiene en tiempo real en el dashboard
-        logInfo('Obteniendo ventas del mes actual (hasta ayer)...');
-
         const startDate = startOfMonth(today);
-        const yesterday = subDays(today, 1);
+        let endDate;
 
-        // Ajustar hora fin de ayer a 23:59:59
-        yesterday.setHours(23, 59, 59, 999);
+        if (includeToday) {
+            // Sincronización manual: incluir ventas hasta AHORA
+            endDate = new Date(today);
+            logInfo(`Obteniendo ventas del mes actual (hasta ahora: ${format(endDate, 'dd/MM/yyyy HH:mm')})...`);
+        } else {
+            // Sincronización automática (CRON): solo hasta ayer 23:59:59
+            // Las ventas de hoy se obtienen en tiempo real en el dashboard
+            endDate = subDays(today, 1);
+            endDate.setHours(23, 59, 59, 999);
+            logInfo('Obteniendo ventas del mes actual (hasta ayer)...');
+        }
 
-        // Si es el primer día del mes, yesterday es mes anterior, así que sales es vacío para "este mes"
-        // Pero necesitamos limpiar VentaActual
+        // Si es el primer día del mes y no incluimos hoy, el rango puede quedar vacío
         await prisma.ventaActual.deleteMany({});
 
         let monthlySales = new Map();
 
-        if (startDate <= yesterday) {
+        if (startDate <= endDate) {
             const { getAllSales, aggregateSalesByProduct } = require('../services/salesService');
             // Obtener ventas con rango específico
-            const documents = await getAllSales(startDate, yesterday);
+            const documents = await getAllSales(startDate, endDate);
             monthlySales = aggregateSalesByProduct(documents);
         }
 
@@ -284,7 +289,7 @@ async function syncCurrentMonthData() {
             // No incrementar productosConVentas - estos NO tuvieron ventas
         }
 
-        logSuccess(`VentaActual: ${updated} productos actualizados, ${productosConVentas} con ventas (hasta ${format(yesterday, 'dd/MM/yyyy')})`);
+        logSuccess(`VentaActual: ${updated} productos actualizados, ${productosConVentas} con ventas (hasta ${format(endDate, 'dd/MM/yyyy HH:mm')})`);
         return { updated, productosConVentas };
 
     } catch (error) {
