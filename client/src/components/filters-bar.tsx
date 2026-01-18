@@ -5,24 +5,25 @@ import { Search, Filter, X, ChevronDown, Check } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
 // Tipos de estado posibles
-export type StockStatus = "overstock" | "critical" | "warning" | "healthy" | "excess";
+export type StockStatus = "overstock" | "critical" | "warning" | "healthy";
 
 export const STATUS_OPTIONS: { value: StockStatus; label: string; color: string }[] = [
     { value: "overstock", label: "Sobrestock", color: "bg-purple-100 text-purple-700" },
     { value: "critical", label: "Crítico", color: "bg-red-100 text-red-700" },
     { value: "warning", label: "Bajo", color: "bg-amber-100 text-amber-700" },
     { value: "healthy", label: "OK", color: "bg-green-100 text-green-700" },
-    { value: "excess", label: "Exceso", color: "bg-blue-100 text-blue-700" },
 ];
 
 // Función para calcular el estado de un producto
 export function calculateProductStatus(stock: number, promedio: number, sugerido: number): StockStatus {
     if (sugerido < 0) return "overstock";
+    // Caso especial: si promedio es 0 y stock es 0, retornar "healthy" (Ok)
+    // ya que no hay nada sugerido y el promedio es 0, todo está en orden
+    if (promedio === 0 && stock === 0) return "healthy";
     const ratio = promedio > 0 ? stock / promedio : stock > 0 ? Infinity : 0;
     if (ratio < 0.5) return "critical";
     if (ratio < 1) return "warning";
-    if (ratio <= 2) return "healthy";
-    return "excess";
+    return "healthy";
 }
 
 interface MultiSelectProps {

@@ -11,7 +11,7 @@ interface StockBadgeProps {
     className?: string;
 }
 
-type StockStatus = "critical" | "warning" | "healthy" | "excess" | "overstock";
+type StockStatus = "critical" | "warning" | "healthy" | "overstock";
 
 interface StatusConfig {
     label: string;
@@ -24,7 +24,7 @@ const STATUS_CONFIG: Record<StockStatus, StatusConfig> = {
     overstock: {
         label: "Sobrestock",
         description: "Tienes más stock del necesario para cubrir el mes",
-        formula: "Sugerido < 0 → Stock + Ventas > Promedio",
+        formula: "Sugerido < 0 (Stock + Ventas > Promedio)",
         styles: "bg-purple-100 text-purple-700 border-purple-200",
     },
     critical: {
@@ -42,21 +42,21 @@ const STATUS_CONFIG: Record<StockStatus, StatusConfig> = {
     healthy: {
         label: "OK",
         description: "Stock en niveles saludables",
-        formula: "Stock entre 100% y 200% del Promedio",
+        formula: "Stock ≥ 100% del Promedio",
         styles: "bg-green-100 text-green-700 border-green-200",
-    },
-    excess: {
-        label: "Exceso",
-        description: "Stock alto respecto al promedio de ventas",
-        formula: "Stock > 200% del Promedio",
-        styles: "bg-blue-100 text-blue-700 border-blue-200",
     },
 };
 
 function calculateStatus(stock: number, promedio: number, sugerido?: number): StockStatus {
-    // Si el sugerido es negativo, significa sobrestock
+    // Si el sugerido es negativo, significa sobrestock (tienes más de lo que necesitas)
     if (sugerido !== undefined && sugerido < 0) {
         return "overstock";
+    }
+
+    // Caso especial: si promedio es 0 y stock es 0, retornar "healthy" (Ok)
+    // ya que no hay nada sugerido y el promedio es 0, todo está en orden
+    if (promedio === 0 && stock === 0) {
+        return "healthy";
     }
 
     // Calcular ratio stock/promedio para los demás estados
@@ -66,10 +66,8 @@ function calculateStatus(stock: number, promedio: number, sugerido?: number): St
         return "critical";
     } else if (ratio < 1) {
         return "warning";
-    } else if (ratio <= 2) {
-        return "healthy";
     } else {
-        return "excess";
+        return "healthy"; // Stock >= 100% del promedio = OK
     }
 }
 
@@ -157,7 +155,7 @@ export function StockBadge({ stock, promedio, sugerido, className }: StockBadgeP
 
 // Leyenda exportable para mostrar en el dashboard
 export function StockLegend({ className }: { className?: string }) {
-    const statuses: StockStatus[] = ["overstock", "critical", "warning", "healthy", "excess"];
+    const statuses: StockStatus[] = ["overstock", "critical", "warning", "healthy"];
 
     return (
         <div className={cn("flex flex-wrap gap-3 text-xs", className)}>

@@ -119,16 +119,21 @@ export default function DashboardPage() {
     setCurrentPage(1);
   };
 
-  // KPI calculations (based on ALL filtered products, not just current page)
+  // KPI calculations
   const kpis = useMemo(() => {
     const productos = productosFiltered;
+    const todosProductos = data?.productos || [];
     const totalProductos = productos.length;
 
     const productosConSugerencia = productos.filter((p) => (p.compraSugerida || 0) > 0).length;
-    const productosCriticos = productos.filter((p) => {
+
+    // Stock Crítico: sobre TODOS los productos (no filtrado) para siempre mostrar el total real
+    const productosCriticos = todosProductos.filter((p) => {
       const stock = p.mesActual?.stockActual || 0;
       const prom = p.promedio || 0;
-      return prom > 0 && stock / prom < 0.5;
+      const sugerido = p.compraSugerida || 0;
+      // Crítico = sugerido >= 0 (no sobrestock) Y stock < 50% del promedio
+      return sugerido >= 0 && prom > 0 && stock / prom < 0.5;
     }).length;
 
     const totalCompras = productos.reduce((sum, p) => sum + (p.compraRealizar || 0), 0);
@@ -139,7 +144,7 @@ export default function DashboardPage() {
       productosCriticos,
       totalCompras,
     };
-  }, [productosFiltered]);
+  }, [productosFiltered, data?.productos]);
 
   // Last update time
   const lastUpdate = data?.meta?.generadoEn
