@@ -85,6 +85,7 @@ export interface SyncLog {
     anoTarget: number;
     documentos: number;
     productos: number;
+    productosConVentas: number;
     mensaje: string | null;
     createdAt: string;
 }

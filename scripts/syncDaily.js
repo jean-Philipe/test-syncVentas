@@ -239,6 +239,7 @@ async function syncCurrentMonthData() {
 
         // 3. Actualizar VentaActual con los datos acumulados hasta ayer
         let updated = 0;
+        let productosConVentas = 0; // Contador para productos con ventas
 
         for (const [sku, data] of monthlySales) {
             const producto = await prisma.producto.findUnique({
@@ -258,6 +259,7 @@ async function syncCurrentMonthData() {
                 }
             });
             updated++;
+            productosConVentas++; // Este producto SÍ tuvo ventas
         }
 
         // También actualizar stock para productos sin ventas este mes (pero con stock)
@@ -279,10 +281,11 @@ async function syncCurrentMonthData() {
                 }
             });
             updated++;
+            // No incrementar productosConVentas - estos NO tuvieron ventas
         }
 
-        logSuccess(`VentaActual: ${updated} productos actualizados (hasta ${format(yesterday, 'dd/MM/yyyy')})`);
-        return { updated };
+        logSuccess(`VentaActual: ${updated} productos actualizados, ${productosConVentas} con ventas (hasta ${format(yesterday, 'dd/MM/yyyy')})`);
+        return { updated, productosConVentas };
 
     } catch (error) {
         logError(`Error sincronizando datos actuales: ${error.message}`);

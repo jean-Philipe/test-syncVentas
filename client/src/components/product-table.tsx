@@ -177,10 +177,16 @@ export function ProductTable({ productos, columnas, onOrderUpdated }: ProductTab
                                     idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"
                                 )}
                             >
-                                <td className="sticky left-0 z-10 px-4 py-2 font-medium text-slate-800 border-b border-slate-100 bg-inherit">
+                                <td className={cn(
+                                    "sticky left-0 z-20 px-4 py-2 font-medium text-slate-800 border-b border-slate-100",
+                                    idx % 2 === 0 ? "bg-white" : "bg-slate-50"
+                                )}>
                                     {item.producto.sku}
                                 </td>
-                                <td className="sticky left-[120px] z-10 px-4 py-2 text-slate-600 border-b border-slate-100 bg-inherit max-w-[300px] truncate">
+                                <td className={cn(
+                                    "sticky left-[120px] z-20 px-4 py-2 text-slate-600 border-b border-slate-100 max-w-[300px] truncate shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]",
+                                    idx % 2 === 0 ? "bg-white" : "bg-slate-50"
+                                )}>
                                     {item.producto.descripcion}
                                 </td>
                                 <td className="px-4 py-2 text-slate-500 border-b border-slate-100">

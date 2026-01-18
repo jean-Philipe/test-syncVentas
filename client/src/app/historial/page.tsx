@@ -70,9 +70,14 @@ function SyncLogRow({ log }: { log: SyncLog }) {
                 <span className="text-slate-900 font-mono">{log.documentos}</span>
             </td>
 
-            {/* Productos */}
+            {/* Productos (Total) */}
             <td className="px-4 py-3 text-center">
                 <span className="text-slate-900 font-mono">{log.productos}</span>
+            </td>
+
+            {/* Productos Con Ventas */}
+            <td className="px-4 py-3 text-center">
+                <span className="text-green-700 font-mono font-medium">{log.productosConVentas}</span>
             </td>
 
             {/* Mensaje */}
@@ -165,7 +170,10 @@ export default function HistorialPage() {
                                                 Documentos
                                             </th>
                                             <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                                                Productos
+                                                Productos (Total)
+                                            </th>
+                                            <th className="px-4 py-3 text-center text-xs font-semibold text-green-600 uppercase tracking-wider">
+                                                Con Ventas
                                             </th>
                                             <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                                                 Mensaje

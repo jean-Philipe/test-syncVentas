@@ -5,7 +5,7 @@ import { fetchDashboard, resetOrders, syncProductsApi } from "@/lib/api";
 import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
 import { KPICard } from "@/components/kpi-card";
-import { FiltersBar } from "@/components/filters-bar";
+import { FiltersBar, StockStatus, calculateProductStatus } from "@/components/filters-bar";
 import { ProductTable } from "@/components/product-table";
 import { Pagination } from "@/components/pagination";
 import { SyncModal } from "@/components/sync-modal";
@@ -23,6 +23,7 @@ export default function DashboardPage() {
   const [meses, setMeses] = useState(3);
   const [busqueda, setBusqueda] = useState("");
   const [ocultarCero, setOcultarCero] = useState(false);
+  const [estadosSeleccionados, setEstadosSeleccionados] = useState<StockStatus[]>([]);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -76,8 +77,19 @@ export default function DashboardPage() {
       result = result.filter((p) => (p.promedio || 0) > 0);
     }
 
+    // Filter by status
+    if (estadosSeleccionados.length > 0) {
+      result = result.filter((p) => {
+        const stock = p.mesActual?.stockActual || 0;
+        const promedio = p.promedio || 0;
+        const sugerido = p.compraSugerida || 0;
+        const status = calculateProductStatus(stock, promedio, sugerido);
+        return estadosSeleccionados.includes(status);
+      });
+    }
+
     return result;
-  }, [data?.productos, busqueda, ocultarCero]);
+  }, [data?.productos, busqueda, ocultarCero, estadosSeleccionados]);
 
   // Paginated products
   const { paginatedProducts, totalPages } = useMemo(() => {
@@ -190,6 +202,8 @@ export default function DashboardPage() {
             onBusquedaChange={handleFilterChange(setBusqueda)}
             ocultarCero={ocultarCero}
             onOcultarCeroChange={handleFilterChange(setOcultarCero)}
+            estadosSeleccionados={estadosSeleccionados}
+            onEstadosChange={handleFilterChange(setEstadosSeleccionados)}
             totalProductos={data?.productos?.length || 0}
             productosVisibles={productosFiltered.length}
             className="mb-4"

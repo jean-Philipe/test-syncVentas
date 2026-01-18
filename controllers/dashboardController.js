@@ -161,12 +161,9 @@ async function getDashboard(req, res) {
                 cantidad: ventasPorMes[`${m.ano}-${m.mes}`] || 0
             }));
 
-            // Calcular promedio (solo meses con ventas > 0 para evitar sesgo)
-            const mesesConVentas = ventasMeses.filter(v => v.cantidad > 0);
-            const totalCantidad = mesesConVentas.reduce((sum, v) => sum + v.cantidad, 0);
-            const promedio = mesesConVentas.length > 0
-                ? totalCantidad / mesesConVentas.length
-                : 0;
+            // Calcular promedio simple (dividir entre TODOS los meses del período)
+            const totalCantidad = ventasMeses.reduce((sum, v) => sum + v.cantidad, 0);
+            const promedio = totalCantidad / ventasMeses.length;
 
             // Calcular compra sugerida
             // Fórmula: Promedio - Stock - Venta del mes actual (DB + Hoy)
@@ -427,7 +424,8 @@ async function syncStream(req, res) {
             mesTarget: mesActual.mes,
             anoTarget: mesActual.ano,
             documentos: salesStats.processed || 0,
-            productos: dataStats.updated || 0
+            productos: dataStats.updated || 0,
+            productosConVentas: dataStats.productosConVentas || 0
         }, `Sincronización manual desde dashboard`);
 
         sendEvent({ step: 'complete', message: '¡Sincronización finalizada!' });

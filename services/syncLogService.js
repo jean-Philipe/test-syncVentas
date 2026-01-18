@@ -15,7 +15,8 @@ const prisma = getPrismaClient();
  * @param {number} stats.mesTarget - Mes que se actualizó (1-12)
  * @param {number} stats.anoTarget - Año que se actualizó
  * @param {number} [stats.documentos] - Cantidad de documentos procesados
- * @param {number} [stats.productos] - Cantidad de productos actualizados
+ * @param {number} [stats.productos] - Cantidad de productos actualizados (stock, etc)
+ * @param {number} [stats.productosConVentas] - Productos que tuvieron ventas nuevas registradas
  * @param {string} [mensaje] - Mensaje descriptivo opcional
  */
 async function registrarSync(tipo, stats, mensaje = null) {
@@ -27,11 +28,12 @@ async function registrarSync(tipo, stats, mensaje = null) {
                 anoTarget: stats.anoTarget,
                 documentos: stats.documentos || 0,
                 productos: stats.productos || 0,
+                productosConVentas: stats.productosConVentas || 0,
                 mensaje
             }
         });
 
-        logInfo(`📝 SyncLog registrado: ${tipo} para ${stats.mesTarget}/${stats.anoTarget} - ${stats.documentos || 0} docs, ${stats.productos || 0} productos`);
+        logInfo(`📝 SyncLog registrado: ${tipo} para ${stats.mesTarget}/${stats.anoTarget} - ${stats.documentos || 0} docs, ${stats.productosConVentas || 0} productos con ventas`);
 
         return log;
     } catch (error) {
