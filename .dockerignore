@@ -1,0 +1,42 @@
+# Dependencies
+node_modules
+client/node_modules
+
+# Build outputs
+client/.next
+client/out
+
+# Local data
+data/
+*.db
+*.sqlite
+
+# Environment files (se pasan via Docker Compose)
+.env
+.env.local
+.env.production
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+
+# Logs
+*.log
+npm-debug.log*
+
+# Cache
+.npm
+.cache
+
+# Test files
+*.test.js
+*.spec.js
+__tests__
+
+# Documentation
+*.md
+!README.md

@@ -78,3 +78,18 @@ model Pedido {
   @@index([productoId, ano, mes])
   @@map("pedidos")
 }
+
+model SyncLog {
+  id          Int      @id @default(autoincrement())
+  tipo        String   // 'ventas_actuales' | 'ventas_historicas' | 'productos' | 'stock'
+  mesTarget   Int      @map("mes_target") // Mes que se actualizó (1-12)
+  anoTarget   Int      @map("ano_target") // Año que se actualizó
+  documentos  Int      @default(0) // Cantidad de documentos procesados
+  productos   Int      @default(0) // Cantidad de productos actualizados
+  mensaje     String?  // Mensaje descriptivo opcional
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([tipo])
+  @@index([createdAt])
+  @@map("sync_logs")
+}

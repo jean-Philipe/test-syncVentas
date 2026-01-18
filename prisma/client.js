@@ -9,7 +9,8 @@ let prisma = null;
 function getPrismaClient() {
     if (!prisma) {
         prisma = new PrismaClient({
-            log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+            // Solo errores y warnings, sin queries
+            log: ['error', 'warn'],
         });
     }
     return prisma;

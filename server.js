@@ -5,6 +5,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const cron = require('node-cron');
 const { logInfo, logSuccess, logError } = require('./utils/logger');
 const { necesitaRotacion, ejecutarRotacionCompleta } = require('./services/rotacionService');
@@ -12,17 +13,19 @@ const { syncYesterday } = require('./scripts/syncDaily');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const isProduction = process.env.NODE_ENV === 'production';
 
 // Middlewares
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Middleware de logging (antes de las rutas)
-app.use((req, res, next) => {
-    logInfo(`${req.method} ${req.path}`);
-    next();
-});
+// Middleware de logging desactivado para reducir ruido en consola
+// Descomentar para debug:
+// app.use((req, res, next) => {
+//     logInfo(`${req.method} ${req.path}`);
+//     next();
+// });
 
 // Rutas de API (deben ir antes de los archivos estáticos)
 const productosRoutes = require('./routes/productos');
@@ -35,9 +38,6 @@ app.use('/api/pedidos', pedidosRoutes);
 app.use('/api/rotacion', rotacionRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
-// Servir archivos estáticos del frontend (después de las rutas de API)
-app.use(express.static('public'));
-
 // Ruta de salud
 app.get('/health', (req, res) => {
     res.json({
@@ -46,31 +46,47 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Ruta raíz
-app.get('/', (req, res) => {
-    res.json({
-        message: 'API de Órdenes de Compra - AXAM',
-        version: '1.0.0',
-        endpoints: {
-            productos: {
-                ventasHistoricas: 'GET /api/productos/ventas-historicas?meses=12&marca=KC',
-                ventasActuales: 'GET /api/productos/ventas-actuales?marca=KC',
-                completo: 'GET /api/productos/completo?meses=12&marca=KC'
-            },
-            pedidos: {
-                listar: 'GET /api/pedidos?productoId=1&ano=2026&mes=1&marca=KC',
-                porProducto: 'GET /api/pedidos/:productoId',
-                crearActualizar: 'PUT /api/pedidos/:productoId',
-                crearActualizarActual: 'PUT /api/pedidos/:productoId/actual',
-                eliminar: 'DELETE /api/pedidos/:productoId/:ano/:mes'
-            },
-            rotacion: {
-                ejecutar: 'POST /api/rotacion/ejecutar',
-                verificar: 'GET /api/rotacion/verificar'
+// Servir archivos estáticos según el entorno
+if (isProduction) {
+    // En producción: servir el build de Next.js
+    const nextStaticDir = path.join(__dirname, 'client/.next/static');
+    const nextPublicDir = path.join(__dirname, 'client/public');
+
+    app.use('/_next/static', express.static(nextStaticDir, { maxAge: '1y' }));
+    app.use(express.static(nextPublicDir));
+
+    logInfo('Modo producción: sirviendo frontend Next.js');
+} else {
+    // En desarrollo: servir public viejo (el frontend NextJS corre en otro puerto)
+    app.use(express.static('public'));
+
+    // Ruta raíz para desarrollo/legacy
+    app.get('/', (req, res) => {
+        res.json({
+            message: 'API de Órdenes de Compra - AXAM',
+            version: '1.0.0',
+            frontend: 'http://localhost:3001 (Next.js dev server)',
+            endpoints: {
+                productos: {
+                    ventasHistoricas: 'GET /api/productos/ventas-historicas?meses=12&marca=KC',
+                    ventasActuales: 'GET /api/productos/ventas-actuales?marca=KC',
+                    completo: 'GET /api/productos/completo?meses=12&marca=KC'
+                },
+                pedidos: {
+                    listar: 'GET /api/pedidos?productoId=1&ano=2026&mes=1&marca=KC',
+                    porProducto: 'GET /api/pedidos/:productoId',
+                    crearActualizar: 'PUT /api/pedidos/:productoId',
+                    crearActualizarActual: 'PUT /api/pedidos/:productoId/actual',
+                    eliminar: 'DELETE /api/pedidos/:productoId/:ano/:mes'
+                },
+                rotacion: {
+                    ejecutar: 'POST /api/rotacion/ejecutar',
+                    verificar: 'GET /api/rotacion/verificar'
+                }
             }
-        }
+        });
     });
-});
+}
 
 // Manejo de errores
 app.use((err, req, res, next) => {
@@ -98,9 +114,27 @@ async function verificarRotacionInicial() {
 
 // Iniciar servidor
 async function startServer() {
+    const { getPrismaClient } = require('./prisma/client');
+    const prisma = getPrismaClient();
+
     try {
         // Verificar rotación antes de iniciar
         await verificarRotacionInicial();
+
+        // Verificar si hay datos en VentaActual (si está vacía, sincronizar)
+        const ventaActualCount = await prisma.ventaActual.count();
+        if (ventaActualCount === 0) {
+            logInfo('📊 VentaActual vacía. Ejecutando sincronización inicial...');
+            try {
+                await syncYesterday();
+                logSuccess('✅ Sincronización inicial completada');
+            } catch (error) {
+                logError(`❌ Error en sincronización inicial: ${error.message}`);
+                // Continuamos sin datos - el usuario puede usar el botón manual
+            }
+        } else {
+            logInfo(`📊 VentaActual contiene ${ventaActualCount} registros`);
+        }
 
         // Programar sincronización diaria a las 01:00 AM
         cron.schedule('0 1 * * *', async () => {
@@ -115,11 +149,20 @@ async function startServer() {
 
         logInfo('🕒 Tarea CRON programada: Sincronización diaria a las 01:00 AM');
 
-        app.listen(PORT, () => {
+        const server = app.listen(PORT, () => {
             logSuccess(`🚀 Servidor iniciado en http://localhost:${PORT}`);
             logInfo(`📊 API de Órdenes de Compra - AXAM`);
-            logInfo(`   Endpoints disponibles en http://localhost:${PORT}/`);
+            if (isProduction) {
+                logInfo(`🌐 Frontend Next.js sirviendo en http://localhost:${PORT}`);
+            } else {
+                logInfo(`   API disponible en http://localhost:${PORT}/`);
+                logInfo(`   Frontend dev server: cd client && npm run dev`);
+            }
         });
+
+        // Aumentar timeout del servidor a 5 minutos (300000ms) para soportar sincronizaciones largas
+        server.setTimeout(300000);
+
     } catch (error) {
         logError(`Error al iniciar servidor: ${error.message}`);
         process.exit(1);

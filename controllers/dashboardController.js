@@ -10,10 +10,13 @@
 
 const { getPrismaClient } = require('../prisma/client');
 const { getMesActual } = require('../services/rotacionService');
-const { logError, logInfo } = require('../utils/logger');
+const { logError, logInfo, logSuccess } = require('../utils/logger');
 const { subMonths, getYear, getMonth, format } = require('date-fns');
 const { getChileDate } = require('../utils/timezone');
 const { getAllSales, aggregateSalesByProduct } = require('../services/salesService');
+const { syncYesterday, syncNewProducts, syncDaySales, syncCurrentMonthData } = require('../scripts/syncDaily');
+const { subDays } = require('date-fns');
+const { registrarSync, getSyncLogs } = require('../services/syncLogService');
 
 const prisma = getPrismaClient();
 
@@ -93,27 +96,22 @@ async function getDashboard(req, res) {
         // ==========================================
         // OBTENER VENTAS DE HOY (LIVE GAP FILLING)
         // ==========================================
-        // Consultamos al ERP solo lo de hoy (00:00 a Ahora)
-
         const today = getChileDate();
         const startOfToday = new Date(today);
         startOfToday.setHours(0, 0, 0, 0);
 
-        const now = new Date(today); // Ahora
-
-        logInfo(`Dashboard: Obteniendo ventas realtime de hoy ${startOfToday.toISOString()} a ${now.toISOString()}`);
+        const now = new Date(today);
 
         let ventasHoyMap = new Map();
         try {
             const docsHoy = await getAllSales(startOfToday, now);
             ventasHoyMap = aggregateSalesByProduct(docsHoy);
-            logInfo(`Dashboard: ${docsHoy.length} docs de hoy, ${ventasHoyMap.size} productos vendidos hoy`);
         } catch (error) {
             logError(`Dashboard warning: Error obteniendo ventas live: ${error.message}`);
-            // Continuamos sin ventas de hoy (fallback)
         }
 
-        // Obtener todos los productos con sus datos base (hasta ayer)
+        // Obtener todos los productos con sus datos base
+        // INCLUIR PEDIDOS del mes actual para mostrar compraRealizar guardada
         const productosDB = await prisma.producto.findMany({
             where: filtroMarca,
             include: {
@@ -121,7 +119,13 @@ async function getDashboard(req, res) {
                     where: filtroFecha,
                     orderBy: [{ ano: 'asc' }, { mes: 'asc' }]
                 },
-                ventasActuales: true
+                ventasActuales: true,
+                pedidos: {
+                    where: {
+                        ano: mesActual.ano,
+                        mes: mesActual.mes
+                    }
+                }
             },
             orderBy: { sku: 'asc' }
         });
@@ -130,6 +134,7 @@ async function getDashboard(req, res) {
         const rows = productosDB.map(producto => {
             const ventasHistoricas = producto.ventasHistoricas || [];
             const ventaActualDB = producto.ventasActuales?.[0] || null;
+            const pedidoActual = producto.pedidos?.[0] || null;
 
             // Datos DB (hasta ayer)
             let cantidadMesActual = ventaActualDB?.cantidadVendida || 0;
@@ -179,11 +184,12 @@ async function getDashboard(req, res) {
                 mesActual: {
                     ano: mesActual.ano,
                     mes: mesActual.mes,
-                    ventaActual: cantidadMesActual, // Total acumulado real
+                    ventaActual: cantidadMesActual,
                     stockActual: stockActual
                 },
                 compraSugerida,
-                compraRealizar: compraSugerida > 0 ? compraSugerida : null
+                // Mostrar compraRealizar solo si hay un pedido guardado (NO auto-completar)
+                compraRealizar: pedidoActual?.cantidad ?? null
             };
         });
 
@@ -266,19 +272,51 @@ async function saveOrden(req, res) {
 }
 
 /**
+ * DELETE /api/dashboard/orden/reset
+ * 
+ * Resetear todas las órdenes de compra del mes actual (poner a 0)
+ */
+async function resetOrdenes(req, res) {
+    try {
+        const mesActual = getMesActual();
+
+        // Eliminar todos los pedidos del mes actual
+        const result = await prisma.pedido.deleteMany({
+            where: {
+                ano: mesActual.ano,
+                mes: mesActual.mes
+            }
+        });
+
+        logSuccess(`Reset: ${result.count} pedidos eliminados del mes ${mesActual.mes}/${mesActual.ano}`);
+
+        res.json({
+            success: true,
+            message: `${result.count} pedidos reseteados`,
+            mes: mesActual
+        });
+
+    } catch (error) {
+        logError(`Error en resetOrdenes: ${error.message}`);
+        res.status(500).json({
+            error: 'Error al resetear órdenes',
+            message: error.message
+        });
+    }
+}
+
+/**
  * GET /api/dashboard/sync-status
  * 
  * Obtener estado de la última sincronización
  */
 async function getSyncStatus(req, res) {
     try {
-        // Obtener la última fecha de actualización de VentaActual
         const lastUpdate = await prisma.ventaActual.findFirst({
             orderBy: { updatedAt: 'desc' },
             select: { updatedAt: true }
         });
 
-        // Contar registros
         const stats = await prisma.$transaction([
             prisma.producto.count(),
             prisma.ventaHistorica.count(),
@@ -303,8 +341,110 @@ async function getSyncStatus(req, res) {
     }
 }
 
+/**
+ * GET /api/dashboard/sync-history
+ * 
+ * Obtener historial de sincronizaciones
+ */
+async function getSyncHistory(req, res) {
+    try {
+        const { limit = 50, tipo } = req.query;
+        const limitNum = parseInt(limit, 10);
+
+        const logs = await getSyncLogs(limitNum, tipo || null);
+
+        res.json({
+            logs,
+            total: logs.length
+        });
+
+    } catch (error) {
+        logError(`Error en getSyncHistory: ${error.message}`);
+        res.status(500).json({
+            error: 'Error al obtener historial de sincronización',
+            message: error.message
+        });
+    }
+}
+
+/**
+ * GET /api/dashboard/sync-stream
+ * 
+ * Stream de eventos (SSE) para progreso de sincronización
+ */
+async function syncStream(req, res) {
+    // Headers SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const sendEvent = (data) => {
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const mesActual = getMesActual();
+
+    try {
+        logInfo('Iniciando stream de sincronización...');
+        sendEvent({ step: 'start', message: 'Conectando con Manager+...' });
+
+        // 1. Productos
+        sendEvent({ step: 'products', message: 'Buscando nuevos productos...' });
+        const prodStats = await syncNewProducts();
+        sendEvent({
+            step: 'products_done',
+            message: `Catálogo: ${prodStats.created} nuevos, ${prodStats.updated} actualizados`
+        });
+
+        // Registrar log de productos si hubo cambios
+        if (prodStats.created > 0 || prodStats.updated > 0) {
+            await registrarSync('productos', {
+                mesTarget: mesActual.mes,
+                anoTarget: mesActual.ano,
+                productos: prodStats.created + prodStats.updated
+            }, `${prodStats.created} nuevos, ${prodStats.updated} actualizados`);
+        }
+
+        // 2. Ventas Ayer (Incremental)
+        const yesterday = subDays(new Date(), 1);
+        sendEvent({ step: 'sales', message: `Analizando ventas del ${format(yesterday, 'dd/MM/yyyy')}...` });
+        const salesStats = await syncDaySales(yesterday);
+        sendEvent({
+            step: 'sales_done',
+            message: `Ventas ayer: ${salesStats.processed} docs procesados`
+        });
+
+        // 3. Datos mes actual (Acumulado + Stock)
+        sendEvent({ step: 'data', message: 'Actualizando stock y contadores...' });
+        const dataStats = await syncCurrentMonthData();
+        sendEvent({
+            step: 'data_done',
+            message: `Stock actualizado para ${dataStats.updated} productos`
+        });
+
+        // Registrar log de ventas del mes actual
+        await registrarSync('ventas_actuales', {
+            mesTarget: mesActual.mes,
+            anoTarget: mesActual.ano,
+            documentos: salesStats.processed || 0,
+            productos: dataStats.updated || 0
+        }, `Sincronización manual desde dashboard`);
+
+        sendEvent({ step: 'complete', message: '¡Sincronización finalizada!' });
+        res.end();
+
+    } catch (error) {
+        logError(`Error en stream: ${error.message}`);
+        sendEvent({ step: 'error', message: `Error: ${error.message}` });
+        res.end();
+    }
+}
+
 module.exports = {
     getDashboard,
     saveOrden,
-    getSyncStatus
+    resetOrdenes,
+    getSyncStatus,
+    getSyncHistory,
+    syncStream
 };

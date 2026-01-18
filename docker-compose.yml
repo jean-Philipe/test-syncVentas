@@ -1,0 +1,33 @@
+services:
+  axam-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: axam-dashboard
+    restart: unless-stopped
+    ports:
+      - "3001:3000"  # Puerto externo:interno (cambiar 3001 según tu setup)
+    environment:
+      - NODE_ENV=production
+      - TZ=America/Santiago
+      # Configurar la URL de la base de datos externa
+      - DATABASE_URL=${DATABASE_URL}
+      # Variables del ERP (si aplican)
+      - MANAGER_API_URL=${MANAGER_API_URL}
+      - MANAGER_API_USER=${MANAGER_API_USER}
+      - MANAGER_API_PASSWORD=${MANAGER_API_PASSWORD}
+    volumes:
+      # Persistir base de datos SQLite local (si no usas externa)
+      - ./data:/app/data
+    networks:
+      - axam-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  axam-network:
+    driver: bridge

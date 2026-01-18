@@ -1,9 +1,14 @@
 {
   "name": "axam-ordenes-de-compras",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Sistema para mapear productos y calcular ventas mensuales desde FAVEs de Manager+",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "node server.js",
+    "dev:client": "cd client && npm run dev -- -p 3001",
+    "build": "cd client && npm run build",
+    "start": "NODE_ENV=production node server.js",
     "sync:productos": "node scripts/syncProductos.js",
     "sync:ventas": "node scripts/syncVentas.js",
     "sync:ventas:actuales": "node scripts/syncVentasActuales.js",
@@ -13,13 +18,14 @@
     "init:db": "node scripts/initDatabase.js",
     "consultar": "node scripts/consultarVentas.js",
     "test:fave": "node scripts/testFAVE.js",
-    "start": "node scripts/syncProductos.js && node scripts/syncVentas.js",
-    "server": "node server.js",
-    "dev": "node server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "migrar:prisma": "node scripts/migrarABasePrisma.js"
+    "migrar:prisma": "node scripts/migrarABasePrisma.js",
+    "postinstall": "cd client && npm install",
+    "docker:build": "docker build -t axam-dashboard .",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down"
   },
   "keywords": [
     "manager",
@@ -40,5 +46,8 @@
     "express": "^5.2.1",
     "node-cron": "^4.2.1",
     "prisma": "^5.22.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

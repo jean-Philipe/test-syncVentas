@@ -54,6 +54,7 @@ async function syncNewProducts() {
         }
 
         logSuccess(`Productos: ${created} creados, ${updated} actualizados`);
+        return { created, updated };
 
     } catch (error) {
         logError(`Error sincronizando productos: ${error.message}`);
@@ -281,6 +282,7 @@ async function syncCurrentMonthData() {
         }
 
         logSuccess(`VentaActual: ${updated} productos actualizados (hasta ${format(yesterday, 'dd/MM/yyyy')})`);
+        return { updated };
 
     } catch (error) {
         logError(`Error sincronizando datos actuales: ${error.message}`);
@@ -314,7 +316,7 @@ async function syncYesterday() {
 
     } catch (error) {
         logError(`Error en sincronización: ${error.message}`);
-        process.exit(1);
+        throw error;
     }
 }
 
@@ -347,7 +349,7 @@ async function syncInitial(months = 12) {
 
     } catch (error) {
         logError(`Error en sincronización inicial: ${error.message}`);
-        process.exit(1);
+        throw error;
     }
 }
 
@@ -410,5 +412,6 @@ module.exports = {
     syncInitial,
     syncFullMonth,
     syncCurrentMonthData,
-    syncNewProducts
+    syncNewProducts,
+    syncDaySales
 };
